@@ -1,19 +1,28 @@
 package com.cursoandroid.olx.activity;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.Spinner;
+import android.widget.Toast;
 
 import com.cursoandroid.olx.R;
 import com.cursoandroid.olx.adapter.AdapterAnuncios;
 import com.cursoandroid.olx.helper.ConfiguracaoFirebase;
+import com.cursoandroid.olx.helper.RecyclerItemClickListener;
 import com.cursoandroid.olx.model.Anuncio;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DataSnapshot;
@@ -31,11 +40,13 @@ public class AnunciosActivity extends AppCompatActivity {
 
     private FirebaseAuth autenticacao;
     private RecyclerView recyclerAnunciosPublicos;
-    private Button buttonRegiao, buttonCategoria;
     private android.app.AlertDialog dialog;
     private AdapterAnuncios adapterAnuncios;
     private List<Anuncio> listaAnuncios = new ArrayList<>();
     private DatabaseReference anunciosPublicosRef;
+    private String filtroEstado = "";
+    private String filtroCategoria = "";
+    private Boolean filtrandoPorEstado = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,6 +68,178 @@ public class AnunciosActivity extends AppCompatActivity {
 
         recuperarAnunciosPublicos();
 
+        //Aplicar evento de clique
+        recyclerAnunciosPublicos.addOnItemTouchListener(
+                new RecyclerItemClickListener(
+                        this,
+                        recyclerAnunciosPublicos,
+                        new RecyclerItemClickListener.OnItemClickListener() {
+                            @Override
+                            public void onItemClick(View view, int position) {
+                                Anuncio anuncioSelecionado = listaAnuncios.get(position);
+                                Intent i = new Intent(AnunciosActivity.this, DetalhesProdutoActivity.class);
+                                i.putExtra("anuncioSelecionado", anuncioSelecionado);
+                                startActivity(i);
+                            }
+
+                            @Override
+                            public void onLongItemClick(View view, int position) {
+
+                            }
+
+                            @Override
+                            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+
+                            }
+                        }
+                )
+        );
+    }
+
+    public void filtrarPorCategoria(View view){
+
+        if (filtrandoPorEstado == true){
+
+            AlertDialog.Builder dialogCategoria = new AlertDialog.Builder(this);
+            dialogCategoria.setTitle("Selecione a categoria desejada");
+
+            //Configura Spinner
+            View viewSpinner = getLayoutInflater().inflate(R.layout.dialog_spinner, null);
+
+            //Configura spinner categoria
+            Spinner spinnerCategoria = viewSpinner.findViewById(R.id.spinnerFiltro);
+            String[] categorias = getResources().getStringArray(R.array.categorias);
+            ArrayAdapter<String> adapterCategoria = new ArrayAdapter<>(
+                    this, android.R.layout.simple_spinner_item,
+                    categorias
+            );
+            adapterCategoria.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            spinnerCategoria.setAdapter(adapterCategoria);
+
+            dialogCategoria.setView(viewSpinner);
+
+            dialogCategoria.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialogInterface, int i) {
+                    filtroCategoria = spinnerCategoria.getSelectedItem().toString();
+                    recuperarAnunciosPorCategoria();
+                }
+            });
+
+            dialogCategoria.setNegativeButton("Cancelar", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialogInterface, int i) {
+
+                }
+            });
+
+            AlertDialog dialog = dialogCategoria.create();
+            dialog.show();
+
+        }else {
+            Toast.makeText(this,
+                    "Escolha primeiro uma região!",
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    public void recuperarAnunciosPorCategoria(){
+        //Configura nó por categoria
+        anunciosPublicosRef = ConfiguracaoFirebase.getFirebase()
+                .child("anuncios")
+                .child(filtroEstado)
+                .child(filtroCategoria);
+
+        anunciosPublicosRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+
+                listaAnuncios.clear();
+                for (DataSnapshot anuncios : snapshot.getChildren()){
+
+                    Anuncio anuncio = anuncios.getValue(Anuncio.class);
+                    listaAnuncios.add(anuncio);
+                }
+
+                Collections.reverse(listaAnuncios);
+                adapterAnuncios.notifyDataSetChanged();
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+
+            }
+        });
+    }
+
+    public void filtrarPorEstado(View view){
+
+        AlertDialog.Builder dialogEstado = new AlertDialog.Builder(this);
+        dialogEstado.setTitle("Selecione o estado desejado");
+
+        //Configura Spinner
+        View viewSpinner = getLayoutInflater().inflate(R.layout.dialog_spinner, null);
+
+        //Configura spinner estado
+        Spinner spinnerEstado = viewSpinner.findViewById(R.id.spinnerFiltro);
+        String[] estados = getResources().getStringArray(R.array.estados);
+        ArrayAdapter<String> adapterEstado = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item,
+                estados
+        );
+        adapterEstado.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerEstado.setAdapter(adapterEstado);
+
+        dialogEstado.setView(viewSpinner);
+
+        dialogEstado.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                filtroEstado = spinnerEstado.getSelectedItem().toString();
+                recuperarAnunciosPorEstado();
+                filtrandoPorEstado = true;
+            }
+        });
+
+        dialogEstado.setNegativeButton("Cancelar", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+
+            }
+        });
+
+        AlertDialog dialog = dialogEstado.create();
+        dialog.show();
+    }
+
+    public void recuperarAnunciosPorEstado(){
+        //Configura nó por estado
+        anunciosPublicosRef = ConfiguracaoFirebase.getFirebase()
+                .child("anuncios")
+                .child(filtroEstado);
+
+        anunciosPublicosRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+
+                listaAnuncios.clear();
+                for (DataSnapshot categorias : snapshot.getChildren()){
+                    for (DataSnapshot anuncios : categorias.getChildren()){
+
+                        Anuncio anuncio = anuncios.getValue(Anuncio.class);
+                        listaAnuncios.add(anuncio);
+                    }
+                }
+
+                Collections.reverse(listaAnuncios);
+                adapterAnuncios.notifyDataSetChanged();
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+
+            }
+        });
     }
 
     public void recuperarAnunciosPublicos(){
@@ -72,6 +255,9 @@ public class AnunciosActivity extends AppCompatActivity {
         anunciosPublicosRef.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
+
+                listaAnuncios.clear();
+
                 for (DataSnapshot estados : snapshot.getChildren()){
                     for (DataSnapshot categorias : estados.getChildren()){
                         for (DataSnapshot anuncios : categorias.getChildren()){
